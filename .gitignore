@@ -1,3 +1,5 @@
 *.out
 *.o
 myexp
+test_auto_vectorize
+assembly/
