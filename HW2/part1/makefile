@@ -1,6 +1,6 @@
 CC := gcc
 exe := pi.out
-CFLAGS := -Wall -pthread -Iinclude mtwister.c
+CFLAGS := -O3 -Wall -pthread -Iinclude mtwister.c
 
 all:$(exe)
 
