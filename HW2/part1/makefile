@@ -1,11 +1,11 @@
 CC := gcc
 exe := pi.out
-CFLAGS := -Wall
+CFLAGS := -Wall -pthread -Iinclude mtwister.c
 
 all:$(exe)
 
 %.out: %.c
-	$(CC) ${CFLAGS} $^ -o $@ -Iinclude mtwister.c
+	$(CC) ${CFLAGS} $^ -o $@
 
 .PHONY: clean
 clean:
