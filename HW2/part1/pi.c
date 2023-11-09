@@ -95,5 +95,5 @@ int main(int argc, char *argv[])
     pthread_mutex_destroy(&mutex);
     free(threads);
 
-    printf("Pi: %f\n", 4 * number_in_circle / ((double)number_of_tosses));
+    printf("%f\n", 4 * number_in_circle / ((double)number_of_tosses));
 }
