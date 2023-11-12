@@ -1,5 +1,7 @@
 *.out
 *.o
+*.ppm
+mandelbrot
 myexp
 test_auto_vectorize
 assembly/
