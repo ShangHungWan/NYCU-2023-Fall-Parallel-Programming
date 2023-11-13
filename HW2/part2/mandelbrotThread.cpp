@@ -38,19 +38,13 @@ void workerThreadStart(WorkerArgs *const args)
     // Of course, you can copy mandelbrotSerial() to this file and
     // modify it to pursue a better performance.
 
-    int perThreadRow = args->height / args->numThreads;
-    int startRow = args->threadId * perThreadRow;
-    int endRow = (args->threadId + 1) * perThreadRow;
-
-    if (args->threadId == args->numThreads - 1)
-    {
-        endRow = args->height;
-    }
+    int startRow = args->threadId;
+    int endRow = args->height;
 
     float dx = (args->x1 - args->x0) / args->width;
     float dy = (args->y1 - args->y0) / args->height;
 
-    for (int j = startRow; j < endRow; j++)
+    for (int j = startRow; j < endRow; j += args->numThreads)
     {
         for (unsigned int i = 0; i < args->width; ++i)
         {
