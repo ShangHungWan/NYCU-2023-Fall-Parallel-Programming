@@ -15,8 +15,6 @@ typedef struct
     int numThreads;
 } WorkerArgs;
 
-extern int mandel(float c_re, float c_im, int count);
-
 extern void mandelbrotSerial(
     float x0, float y0, float x1, float y1,
     int width, int height,
@@ -24,20 +22,30 @@ extern void mandelbrotSerial(
     int maxIterations,
     int output[]);
 
+static inline int mandel(float c_re, float c_im, int count)
+{
+    float z_re = c_re, z_im = c_im;
+    int i;
+    for (i = 0; i < count; ++i)
+    {
+        if (z_re * z_re + z_im * z_im > 4.f)
+            break;
+
+        float new_re = z_re * z_re - z_im * z_im;
+        float new_im = 2.f * z_re * z_im;
+        z_re = c_re + new_re;
+        z_im = c_im + new_im;
+    }
+
+    return i;
+}
+
 //
 // workerThreadStart --
 //
 // Thread entrypoint.
 void workerThreadStart(WorkerArgs *const args)
 {
-    // TODO FOR PP STUDENTS: Implement the body of the worker
-    // thread here. Each thread could make a call to mandelbrotSerial()
-    // to compute a part of the output image. For example, in a
-    // program that uses two threads, thread 0 could compute the top
-    // half of the image and thread 1 could compute the bottom half.
-    // Of course, you can copy mandelbrotSerial() to this file and
-    // modify it to pursue a better performance.
-
     int startRow = args->threadId;
     int endRow = args->height;
 
@@ -82,9 +90,6 @@ void mandelbrotThread(
 
     for (int i = 0; i < numThreads; i++)
     {
-        // TODO FOR PP STUDENTS: You may or may not wish to modify
-        // the per-thread arguments here.  The code below copies the
-        // same arguments for each thread
         args[i].x0 = x0;
         args[i].y0 = y0;
         args[i].x1 = x1;
