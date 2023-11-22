@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define PAD 8
+
 //---------------------------------------------------------------------
 // Floaging point arrays here are named as in spec discussion of
 // CG algorithm
@@ -65,15 +67,16 @@ void conj_grad(int colidx[],
         {
             int number_threads = omp_get_num_threads();
             int id = omp_get_thread_num();
+            double *sums = malloc(number_threads * PAD * sizeof(double));
 
             for (j = id; j < lastrow - firstrow + 1; j += number_threads)
             {
-                sum = 0.0;
+                sums[id * PAD] = 0.0;
                 for (k = rowstr[j]; k < rowstr[j + 1]; k++)
                 {
-                    sum = sum + a[k] * p[colidx[k]];
+                    sums[id * PAD] += a[k] * p[colidx[k]];
                 }
-                q[j] = sum;
+                q[j] = sums[id * PAD];
             }
         }
 
@@ -326,82 +329,75 @@ void sparse(double a[],
     //---------------------------------------------------------------------
     size = 1.0;
     ratio = pow(rcond, (1.0 / (double)(n)));
+    logical cont40;
 
-#pragma omp parallel
+    for (i = 0; i < n; i++)
     {
-        int number_threads = omp_get_num_threads();
-        int id = omp_get_thread_num();
-
-        logical *cont40s = malloc(number_threads * sizeof(logical));
-
-        for (i = id; i < n; i += number_threads)
+        for (nza = 0; nza < arow[i]; nza++)
         {
-            for (nza = 0; nza < arow[i]; nza++)
+            j = acol[i][nza];
+
+            scale = size * aelt[i][nza];
+            for (nzrow = 0; nzrow < arow[i]; nzrow++)
             {
-                j = acol[i][nza];
+                jcol = acol[i][nzrow];
+                va = aelt[i][nzrow] * scale;
 
-                scale = size * aelt[i][nza];
-                for (nzrow = 0; nzrow < arow[i]; nzrow++)
+                //--------------------------------------------------------------------
+                // ... add the identity * rcond to the generated matrix to bound
+                //     the smallest eigenvalue from below by rcond
+                //--------------------------------------------------------------------
+                if (jcol == j && j == i)
                 {
-                    jcol = acol[i][nzrow];
-                    va = aelt[i][nzrow] * scale;
-
-                    //--------------------------------------------------------------------
-                    // ... add the identity * rcond to the generated matrix to bound
-                    //     the smallest eigenvalue from below by rcond
-                    //--------------------------------------------------------------------
-                    if (jcol == j && j == i)
-                    {
-                        va = va + rcond - shift;
-                    }
-
-                    cont40s[id] = false;
-                    for (k = rowstr[j]; k < rowstr[j + 1]; k++)
-                    {
-                        if (colidx[k] > jcol)
-                        {
-                            //----------------------------------------------------------------
-                            // ... insert colidx here orderly
-                            //----------------------------------------------------------------
-                            for (kk = rowstr[j + 1] - 2; kk >= k; kk--)
-                            {
-                                if (colidx[kk] > -1)
-                                {
-                                    a[kk + 1] = a[kk];
-                                    colidx[kk + 1] = colidx[kk];
-                                }
-                            }
-                            colidx[k] = jcol;
-                            a[k] = 0.0;
-                            cont40s[id] = true;
-                            break;
-                        }
-                        else if (colidx[k] == -1)
-                        {
-                            colidx[k] = jcol;
-                            cont40s[id] = true;
-                            break;
-                        }
-                        else if (colidx[k] == jcol)
-                        {
-                            //--------------------------------------------------------------
-                            // ... mark the duplicated entry
-                            //--------------------------------------------------------------
-                            nzloc[j] = nzloc[j] + 1;
-                            cont40s[id] = true;
-                            break;
-                        }
-                    }
-                    if (cont40s[id] == false)
-                    {
-                        printf("internal error in sparse: i=%d\n", i);
-                        exit(EXIT_FAILURE);
-                    }
-                    a[k] = a[k] + va;
+                    va = va + rcond - shift;
                 }
+
+                cont40 = false;
+                for (k = rowstr[j]; k < rowstr[j + 1]; k++)
+                {
+                    if (colidx[k] > jcol)
+                    {
+                        //----------------------------------------------------------------
+                        // ... insert colidx here orderly
+                        //----------------------------------------------------------------
+                        for (kk = rowstr[j + 1] - 2; kk >= k; kk--)
+                        {
+                            if (colidx[kk] > -1)
+                            {
+                                a[kk + 1] = a[kk];
+                                colidx[kk + 1] = colidx[kk];
+                            }
+                        }
+                        colidx[k] = jcol;
+                        a[k] = 0.0;
+                        cont40 = true;
+                        break;
+                    }
+                    else if (colidx[k] == -1)
+                    {
+                        colidx[k] = jcol;
+                        cont40 = true;
+                        break;
+                    }
+                    else if (colidx[k] == jcol)
+                    {
+                        //--------------------------------------------------------------
+                        // ... mark the duplicated entry
+                        //--------------------------------------------------------------
+                        nzloc[j] = nzloc[j] + 1;
+                        cont40 = true;
+                        break;
+                    }
+                }
+                if (cont40 == false)
+                {
+                    printf("internal error in sparse: i=%d\n", i);
+                    exit(EXIT_FAILURE);
+                }
+                a[k] = a[k] + va;
             }
-            size = size * ratio;
         }
+        size = size * ratio;
     }
 
     //---------------------------------------------------------------------
