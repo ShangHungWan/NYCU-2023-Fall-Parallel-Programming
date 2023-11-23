@@ -138,15 +138,22 @@ void conj_grad(int colidx[],
     // First, form A.z
     // The partition submatrix-vector multiply
     //---------------------------------------------------------------------
-    sum = 0.0;
-    for (j = 0; j < lastrow - firstrow + 1; j++)
+
+#pragma omp parallel
     {
-        d = 0.0;
-        for (k = rowstr[j]; k < rowstr[j + 1]; k++)
+        int number_threads = omp_get_num_threads();
+        int id = omp_get_thread_num();
+        double *sums = malloc(number_threads * PAD * sizeof(double));
+
+        for (j = id; j < lastrow - firstrow + 1; j += number_threads)
         {
-            d = d + a[k] * z[colidx[k]];
+            sums[id * PAD] = 0.0;
+            for (k = rowstr[j]; k < rowstr[j + 1]; k++)
+            {
+                sums[id * PAD] += a[k] * z[colidx[k]];
+            }
+            r[j] = sums[id * PAD];
         }
-        r[j] = d;
     }
 
     //---------------------------------------------------------------------
