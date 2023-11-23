@@ -8,6 +8,8 @@
 #include "../common/CycleTimer.h"
 #include "../common/graph.h"
 
+#define PAD 8
+
 // pageRank --
 //
 // g:           graph to process (see common/graph.h)
@@ -30,24 +32,31 @@ void pageRank(Graph g, double *solution, double damping, double convergence)
   bool converged = false;
   while (!converged)
   {
-    for (int i = 0; i < numNodes; ++i)
+#pragma omp parallel
     {
-      double sum = 0.0;
+      int numThreads = omp_get_num_threads();
+      int threadId = omp_get_thread_num();
+      double *sums = new double[numThreads * PAD];
 
-      const Vertex *start = incoming_begin(g, i);
-      const Vertex *end = incoming_end(g, i);
-      for (const Vertex *j = start; j != end; ++j)
+      for (int i = threadId; i < numNodes; i += numThreads)
       {
-        sum += score_old[*j] / outgoing_size(g, *j);
-      }
+        sums[threadId * PAD] = 0.0;
 
-      score_new[i] = (damping * sum) + (1.0 - damping) / numNodes;
-
-      for (int j = 0; j < numNodes; ++j)
-      {
-        if (outgoing_size(g, j) == 0)
+        const Vertex *start = incoming_begin(g, i);
+        const Vertex *end = incoming_end(g, i);
+        for (const Vertex *j = start; j != end; ++j)
         {
-          score_new[i] += damping * score_old[j] / numNodes;
+          sums[threadId * PAD] += score_old[*j] / outgoing_size(g, *j);
+        }
+
+        score_new[i] = (damping * sums[threadId * PAD]) + (1.0 - damping) / numNodes;
+
+        for (int j = 0; j < numNodes; ++j)
+        {
+          if (outgoing_size(g, j) == 0)
+          {
+            score_new[i] += damping * score_old[j] / numNodes;
+          }
         }
       }
     }
