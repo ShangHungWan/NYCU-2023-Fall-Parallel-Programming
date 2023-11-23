@@ -17,43 +17,57 @@
 //
 void pageRank(Graph g, double *solution, double damping, double convergence)
 {
-
-  // initialize vertex weights to uniform probability. Double
-  // precision scores are used to avoid underflow for large graphs
-
   int numNodes = num_nodes(g);
   double equal_prob = 1.0 / numNodes;
+  double *score_old = new double[numNodes];
+  double *score_new = new double[numNodes];
+
   for (int i = 0; i < numNodes; ++i)
   {
-    solution[i] = equal_prob;
+    score_old[i] = equal_prob;
   }
 
-  /*
-     For PP students: Implement the page rank algorithm here.  You
-     are expected to parallelize the algorithm using openMP.  Your
-     solution may need to allocate (and free) temporary arrays.
+  bool converged = false;
+  while (!converged)
+  {
+    for (int i = 0; i < numNodes; ++i)
+    {
+      double sum = 0.0;
 
-     Basic page rank pseudocode is provided below to get you started:
+      const Vertex *start = incoming_begin(g, i);
+      const Vertex *end = incoming_end(g, i);
+      for (const Vertex *j = start; j != end; ++j)
+      {
+        sum += score_old[*j] / outgoing_size(g, *j);
+      }
 
-     // initialization: see example code above
-     score_old[vi] = 1/numNodes;
+      score_new[i] = (damping * sum) + (1.0 - damping) / numNodes;
 
-     while (!converged) {
+      for (int j = 0; j < numNodes; ++j)
+      {
+        if (outgoing_size(g, j) == 0)
+        {
+          score_new[i] += damping * score_old[j] / numNodes;
+        }
+      }
+    }
 
-       // compute score_new[vi] for all nodes vi:
-       score_new[vi] = sum over all nodes vj reachable from incoming edges
-                          { score_old[vj] / number of edges leaving vj  }
-       score_new[vi] = (damping * score_new[vi]) + (1.0-damping) / numNodes;
+    double global_diff = 0.0;
+    for (int i = 0; i < numNodes; ++i)
+    {
+      global_diff += abs(score_new[i] - score_old[i]);
+    }
 
-       score_new[vi] += sum over all nodes v in graph with no outgoing edges
-                          { damping * score_old[v] / numNodes }
+    converged = (global_diff < convergence);
 
-       // compute how much per-node scores have changed
-       // quit once algorithm has converged
+    std::swap(score_old, score_new);
+  }
 
-       global_diff = sum over all nodes vi { abs(score_new[vi] - score_old[vi]) };
-       converged = (global_diff < convergence)
-     }
+  for (int i = 0; i < numNodes; ++i)
+  {
+    solution[i] = score_old[i];
+  }
 
-   */
+  delete[] score_new;
+  delete[] score_old;
 }
