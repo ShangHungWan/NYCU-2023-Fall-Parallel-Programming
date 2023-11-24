@@ -1,2 +1,8 @@
 cg
 *.o
+bfs
+bfs*
+pr
+pr*
+graphTools
+graphs/
