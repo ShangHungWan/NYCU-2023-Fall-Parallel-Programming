@@ -12,6 +12,9 @@
 #define ROOT_NODE_ID 0
 #define NOT_VISITED_MARKER -1
 
+#define ALPHA 14
+#define BETA 24
+
 void vertex_set_clear(vertex_set *list)
 {
     list->count = 0;
@@ -65,10 +68,16 @@ void bottom_up_step(
     int *distances)
 {
     bool *frontier_hashed_map = (bool *)malloc(sizeof(bool) * g->num_nodes);
+#pragma omp parallel for
     for (int i = 0; i < g->num_nodes; i++)
+    {
         frontier_hashed_map[i] = false;
+    }
+#pragma omp parallel for
     for (int i = 0; i < frontier->count; i++)
+    {
         frontier_hashed_map[frontier->vertices[i]] = true;
+    }
 
 #pragma omp parallel for
     for (int i = 0; i < g->num_nodes; i++)
@@ -197,6 +206,8 @@ void bfs_hybrid(Graph graph, solution *sol)
     frontier->vertices[frontier->count++] = ROOT_NODE_ID;
     sol->distances[ROOT_NODE_ID] = 0;
 
+    bool now_top_down = true;
+
     while (frontier->count != 0)
     {
 #ifdef VERBOSE
@@ -205,10 +216,53 @@ void bfs_hybrid(Graph graph, solution *sol)
 
         vertex_set_clear(new_frontier);
 
-        if (frontier->count < graph->num_nodes / 2)
+        int edges_of_frontier = 0;
+#pragma omp parallel for reduction(+ : edges_of_frontier)
+        for (int i = 0; i < frontier->count; i++)
+        {
+            int node = frontier->vertices[i];
+
+            int start_edge = graph->outgoing_starts[node];
+            int end_edge = (node == graph->num_nodes - 1)
+                               ? graph->num_edges
+                               : graph->outgoing_starts[node + 1];
+
+            edges_of_frontier += end_edge - start_edge;
+        }
+        int vertices_of_frontier = frontier->count;
+
+        int edges_of_unvisited = graph->num_edges;
+#pragma omp parallel for reduction(- : edges_of_unvisited)
+        for (int i = 0; i < graph->num_nodes; i++)
+        {
+            if (sol->distances[i] != NOT_VISITED_MARKER)
+            {
+                int start_edge = graph->outgoing_starts[i];
+                int end_edge = (i == graph->num_nodes - 1)
+                                   ? graph->num_edges
+                                   : graph->outgoing_starts[i + 1];
+                edges_of_unvisited -= end_edge - start_edge;
+            }
+        }
+        int verticles = graph->num_nodes;
+
+        if (now_top_down && edges_of_frontier > edges_of_unvisited / ALPHA)
+        {
+            now_top_down = false;
+        }
+        else if (!now_top_down && vertices_of_frontier < verticles / BETA)
+        {
+            now_top_down = true;
+        }
+
+        if (now_top_down)
+        {
             top_down_step(graph, frontier, new_frontier, sol->distances);
+        }
         else
+        {
             bottom_up_step(graph, frontier, new_frontier, sol->distances);
+        }
 
 #ifdef VERBOSE
         double end_time = CycleTimer::currentSeconds();
