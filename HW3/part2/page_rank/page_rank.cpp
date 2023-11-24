@@ -23,67 +23,55 @@ void pageRank(Graph g, double *solution, double damping, double convergence)
   double equal_prob = 1.0 / numNodes;
   double damping_factor = damping / numNodes;
   double equal_prob_damping = (1.0 - damping) / numNodes;
+  double add_to_score_new = equal_prob_damping;
 
   double *score_old = new double[numNodes];
   double *score_new = new double[numNodes];
+  int *no_outgoing = new int[numNodes];
 
-#pragma omp parallel
+  int no_outgoing_nums = 0;
+
+  for (int i = 0; i < numNodes; ++i)
   {
-    int numThreads = omp_get_num_threads();
-    int threadId = omp_get_thread_num();
-
-    for (int i = threadId; i < numNodes; i += numThreads)
+    if (outgoing_size(g, i) == 0)
     {
-      score_old[i] = equal_prob;
+      no_outgoing[no_outgoing_nums++] = i;
     }
+  }
+
+#pragma omp parallel for
+  for (int i = 0; i < numNodes; i++)
+  {
+    score_old[i] = equal_prob;
   }
 
   bool converged = false;
   while (!converged)
   {
-#pragma omp parallel
+#pragma omp parallel for
+    for (int i = 0; i < numNodes; i++)
     {
-      int numThreads = omp_get_num_threads();
-      int threadId = omp_get_thread_num();
-      double *sums = new double[numThreads * PAD];
-
-      for (int i = threadId; i < numNodes; i += numThreads)
+      double no_outgoing_sum = 0.0;
+#pragma omp parallel for reduction(+ : no_outgoing_sum)
+      for (int i = 0; i < no_outgoing_nums; i++)
       {
-        sums[threadId * PAD] = 0.0;
-
-        const Vertex *start = incoming_begin(g, i);
-        const Vertex *end = incoming_end(g, i);
-        for (const Vertex *j = start; j != end; ++j)
-        {
-          sums[threadId * PAD] += score_old[*j] / outgoing_size(g, *j);
-        }
-
-        score_new[i] = (damping * sums[threadId * PAD]) + equal_prob_damping;
+        no_outgoing_sum += score_old[no_outgoing[i]];
       }
 
-      delete[] sums;
-    }
+      no_outgoing_sum *= damping_factor;
+      add_to_score_new = equal_prob_damping + no_outgoing_sum;
 
-#pragma omp parallel
-    {
-      int numThreads = omp_get_num_threads();
-      int threadId = omp_get_thread_num();
-      double *sums = new double[numThreads * PAD];
+      double sum = 0.0;
 
-      for (int i = threadId; i < numNodes; i += numThreads)
+      const Vertex *start = incoming_begin(g, i);
+      const Vertex *end = incoming_end(g, i);
+#pragma omp parallel for reduction(+ : sum)
+      for (const Vertex *j = start; j != end; ++j)
       {
-        sums[threadId * PAD] = 0.0;
-        for (int j = 0; j < numNodes; ++j)
-        {
-          if (outgoing_size(g, j) == 0)
-          {
-            sums[threadId * PAD] += damping_factor * score_old[j];
-          }
-        }
-        score_new[i] += sums[threadId * PAD];
+        sum += score_old[*j] / outgoing_size(g, *j);
       }
 
-      delete[] sums;
+      score_new[i] = (damping * sum) + add_to_score_new;
     }
 
     double global_diff = 0.0;
@@ -98,15 +86,10 @@ void pageRank(Graph g, double *solution, double damping, double convergence)
     std::swap(score_old, score_new);
   }
 
-#pragma omp parallel
+#pragma omp parallel for
+  for (int i = 0; i < numNodes; i++)
   {
-    int numThreads = omp_get_num_threads();
-    int threadId = omp_get_thread_num();
-
-    for (int i = threadId; i < numNodes; i += numThreads)
-    {
-      solution[i] = score_old[i];
-    }
+    solution[i] = score_old[i];
   }
 
   delete[] score_new;
