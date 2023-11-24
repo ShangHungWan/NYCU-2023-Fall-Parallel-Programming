@@ -8,8 +8,6 @@
 #include "../common/CycleTimer.h"
 #include "../common/graph.h"
 
-#define PAD 8
-
 // pageRank --
 //
 // g:           graph to process (see common/graph.h)
