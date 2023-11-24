@@ -21,12 +21,21 @@ void pageRank(Graph g, double *solution, double damping, double convergence)
 {
   int numNodes = num_nodes(g);
   double equal_prob = 1.0 / numNodes;
+  double damping_factor = damping / numNodes;
+  double equal_prob_damping = (1.0 - damping) / numNodes;
+
   double *score_old = new double[numNodes];
   double *score_new = new double[numNodes];
 
-  for (int i = 0; i < numNodes; ++i)
+#pragma omp parallel
   {
-    score_old[i] = equal_prob;
+    int numThreads = omp_get_num_threads();
+    int threadId = omp_get_thread_num();
+
+    for (int i = threadId; i < numNodes; i += numThreads)
+    {
+      score_old[i] = equal_prob;
+    }
   }
 
   bool converged = false;
@@ -49,19 +58,36 @@ void pageRank(Graph g, double *solution, double damping, double convergence)
           sums[threadId * PAD] += score_old[*j] / outgoing_size(g, *j);
         }
 
-        score_new[i] = (damping * sums[threadId * PAD]) + (1.0 - damping) / numNodes;
+        score_new[i] = (damping * sums[threadId * PAD]) + equal_prob_damping;
+      }
 
+      delete[] sums;
+    }
+
+#pragma omp parallel
+    {
+      int numThreads = omp_get_num_threads();
+      int threadId = omp_get_thread_num();
+      double *sums = new double[numThreads * PAD];
+
+      for (int i = threadId; i < numNodes; i += numThreads)
+      {
+        sums[threadId * PAD] = 0.0;
         for (int j = 0; j < numNodes; ++j)
         {
           if (outgoing_size(g, j) == 0)
           {
-            score_new[i] += damping * score_old[j] / numNodes;
+            sums[threadId * PAD] += damping_factor * score_old[j];
           }
         }
+        score_new[i] += sums[threadId * PAD];
       }
+
+      delete[] sums;
     }
 
     double global_diff = 0.0;
+#pragma omp parallel for reduction(+ : global_diff)
     for (int i = 0; i < numNodes; ++i)
     {
       global_diff += abs(score_new[i] - score_old[i]);
@@ -72,9 +98,15 @@ void pageRank(Graph g, double *solution, double damping, double convergence)
     std::swap(score_old, score_new);
   }
 
-  for (int i = 0; i < numNodes; ++i)
+#pragma omp parallel
   {
-    solution[i] = score_old[i];
+    int numThreads = omp_get_num_threads();
+    int threadId = omp_get_thread_num();
+
+    for (int i = threadId; i < numNodes; i += numThreads)
+    {
+      solution[i] = score_old[i];
+    }
   }
 
   delete[] score_new;
