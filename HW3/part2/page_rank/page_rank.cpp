@@ -29,6 +29,7 @@ void pageRank(Graph g, double *solution, double damping, double convergence)
 
   int no_outgoing_nums = 0;
 
+  // Find nodes with no outgoing edges
   for (int i = 0; i < numNodes; ++i)
   {
     if (outgoing_size(g, i) == 0)
@@ -37,6 +38,7 @@ void pageRank(Graph g, double *solution, double damping, double convergence)
     }
   }
 
+// Initialize scores
 #pragma omp parallel for
   for (int i = 0; i < numNodes; i++)
   {
@@ -46,24 +48,25 @@ void pageRank(Graph g, double *solution, double damping, double convergence)
   bool converged = false;
   while (!converged)
   {
+    double no_outgoing_sum = 0.0;
+#pragma omp parallel for reduction(+ : no_outgoing_sum)
+    for (int i = 0; i < no_outgoing_nums; i++)
+    {
+      no_outgoing_sum += score_old[no_outgoing[i]];
+    }
+
+    no_outgoing_sum *= damping_factor;
+    add_to_score_new = equal_prob_damping + no_outgoing_sum;
+
+    // calculate score_new[i] for all nodes i
 #pragma omp parallel for
     for (int i = 0; i < numNodes; i++)
     {
-      double no_outgoing_sum = 0.0;
-#pragma omp parallel for reduction(+ : no_outgoing_sum)
-      for (int i = 0; i < no_outgoing_nums; i++)
-      {
-        no_outgoing_sum += score_old[no_outgoing[i]];
-      }
-
-      no_outgoing_sum *= damping_factor;
-      add_to_score_new = equal_prob_damping + no_outgoing_sum;
-
       double sum = 0.0;
 
+      // sum up score_old[j] for all in-edges j -> i
       const Vertex *start = incoming_begin(g, i);
       const Vertex *end = incoming_end(g, i);
-#pragma omp parallel for reduction(+ : sum)
       for (const Vertex *j = start; j != end; ++j)
       {
         sum += score_old[*j] / outgoing_size(g, *j);
@@ -72,6 +75,7 @@ void pageRank(Graph g, double *solution, double damping, double convergence)
       score_new[i] = (damping * sum) + add_to_score_new;
     }
 
+    // check convergence
     double global_diff = 0.0;
 #pragma omp parallel for reduction(+ : global_diff)
     for (int i = 0; i < numNodes; ++i)
