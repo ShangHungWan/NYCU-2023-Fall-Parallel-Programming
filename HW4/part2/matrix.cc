@@ -1,5 +1,4 @@
 #include <mpi.h>
-#include <cstdio>
 
 void construct_matrices(int *n_ptr, int *m_ptr, int *l_ptr, int **a_mat_ptr, int **b_mat_ptr)
 {
@@ -65,19 +64,23 @@ void matrix_multiply(const int n, const int m, const int l, const int *a_mat, co
             c_mat[i] = 0;
     }
 
-    MPI_Bcast(private_a_mat, private_m * private_l, MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(private_b_mat, private_n * private_m, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(private_a_mat, private_n * private_m, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(private_b_mat, private_m * private_l, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(c_mat, private_n * private_l, MPI_INT, 0, MPI_COMM_WORLD);
 
-    for (int i = from; i < to; i++)
-        for (int j = 0; j < private_l; j++)
-        {
-            c_mat[i * private_l + j] = 0;
-            for (int k = 0; k < private_m; k++)
-            {
-                c_mat[i * private_l + j] += private_a_mat[i * private_m + k] * private_b_mat[k * private_l + j];
-            }
-        }
+    const int BLOCK_SIZE = 64;
+
+    for (int ii = from; ii < to; ii += BLOCK_SIZE)
+        for (int jj = 0; jj < private_l; jj += BLOCK_SIZE)
+            for (int kk = 0; kk < private_m; kk += BLOCK_SIZE)
+                for (int i = ii; i < ii + BLOCK_SIZE && i < to; i++)
+                    for (int j = jj; j < jj + BLOCK_SIZE && j < private_l; j++)
+                    {
+                        int sum = 0;
+                        for (int k = kk; k < kk + BLOCK_SIZE && k < private_m; k++)
+                            sum += private_a_mat[i * private_m + k] * private_b_mat[k * private_l + j];
+                        c_mat[i * private_l + j] += sum;
+                    }
 
     if (rank != 0)
     {
@@ -87,10 +90,10 @@ void matrix_multiply(const int n, const int m, const int l, const int *a_mat, co
     }
     else
     {
-        for (int i = 1, start_line = to; i < size; i++, start_line += lengths[i - 1] / private_l)
+        for (int i = 1, start = (to - from) * private_l; i < size; i++, start += lengths[i - 1])
         {
             MPI_Recv(lengths + i, 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Recv(c_mat + start_line * private_l, lengths[i], MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(c_mat + start, lengths[i], MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
 
         for (int i = 0; i < private_n; i++)
