@@ -1,3 +1,4 @@
+hostfile
 hosts
 mpi_hello
 pi_block_linear
@@ -6,3 +7,4 @@ pi_nonblock_linear
 pi_gather
 pi_reduce
 pi_one_side
+matmul
