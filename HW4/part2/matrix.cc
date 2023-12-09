@@ -50,23 +50,22 @@ void matrix_multiply(const int n, const int m, const int l, const int *a_mat, co
     int *private_a_mat = new int[private_n * private_m];
     int *private_b_mat = new int[private_m * private_l];
     int *c_mat = new int[private_n * private_l];
-    int *lengths = new int[size];
+    int *lengths;
 
     if (rank == 0)
     {
+        lengths = new int[size];
+
         for (int i = 0; i < private_n; i++)
             for (int j = 0; j < private_m; j++)
                 private_a_mat[i * private_m + j] = a_mat[i * private_m + j];
         for (int i = 0; i < private_m; i++)
             for (int j = 0; j < private_l; j++)
                 private_b_mat[i * private_l + j] = b_mat[i * private_l + j];
-        for (int i = 0; i < private_n * private_l; i++)
-            c_mat[i] = 0;
     }
 
     MPI_Bcast(private_a_mat, private_n * private_m, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(private_b_mat, private_m * private_l, MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(c_mat, private_n * private_l, MPI_INT, 0, MPI_COMM_WORLD);
 
     const int BLOCK_SIZE = 64;
 
@@ -102,12 +101,13 @@ void matrix_multiply(const int n, const int m, const int l, const int *a_mat, co
                 printf("%d ", c_mat[i * private_l + j]);
             printf("\n");
         }
+
+        delete[] lengths;
     }
 
     delete[] private_a_mat;
     delete[] private_b_mat;
     delete[] c_mat;
-    delete[] lengths;
 }
 
 void destruct_matrices(int *a_mat, int *b_mat)
