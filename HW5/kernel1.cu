@@ -43,4 +43,5 @@ void hostFE(float upperX, float upperY, float lowerX, float lowerY, int *img, in
 
     cudaMemcpy(img, DImg, size, cudaMemcpyDeviceToHost);
     cudaFree(DImg);
+    free(HImg);
 }
