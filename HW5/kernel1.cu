@@ -4,19 +4,20 @@
 
 __global__ void mandelKernel(float lowerX, float lowerY, float stepX, float stepY, int *img, int resX, int resY, int maxIterations)
 {
-    int thisX = threadIdx.x;
-    int thisY = threadIdx.y;
+    int thisX = blockIdx.x * blockDim.x + threadIdx.x;
+    int thisY = blockIdx.y * blockDim.y + threadIdx.y;
 
     float x = lowerX + thisX * stepX;
     float y = lowerY + thisY * stepY;
 
+    float z_re = x, z_im = y;
     int iteration = 0;
-    float xtemp;
-    while (x * x + y * y < 4 && iteration < maxIterations)
+    while (z_re * z_re + z_im * z_im <= 4.f && iteration < maxIterations)
     {
-        xtemp = x * x - y * y + x;
-        y = 2 * x * y + y;
-        x = xtemp;
+        float new_re = z_re * z_re - z_im * z_im;
+        float new_im = 2 * z_re * z_im;
+        z_re = x + new_re;
+        z_im = y + new_im;
         iteration++;
     }
 
@@ -31,17 +32,17 @@ void hostFE(float upperX, float upperY, float lowerX, float lowerY, int *img, in
 
     int *DImg, *HImg;
     int size = resX * resY * sizeof(int);
-    HImg = (int *)malloc(size);
-    memcpy(HImg, img, size);
 
     cudaMalloc(&DImg, size);
-    cudaMemcpy(DImg, HImg, size, cudaMemcpyHostToDevice);
+    HImg = (int *)malloc(size);
 
-    dim3 dimGrid(resX, resY);
-    dim3 dimBlock(1, 1);
-    mandelKernel<<<dimGrid, dimBlock>>>(upperX, upperY, stepX, stepY, DImg, resX, resY, maxIterations);
+    dim3 dimBlock(32, 32);
+    dim3 dimGrid((resX + dimBlock.x - 1) / dimBlock.x, (resY + dimBlock.y - 1) / dimBlock.y);
+    mandelKernel<<<dimGrid, dimBlock>>>(lowerX, lowerY, stepX, stepY, DImg, resX, resY, maxIterations);
 
-    cudaMemcpy(img, DImg, size, cudaMemcpyDeviceToHost);
-    cudaFree(DImg);
+    cudaMemcpy(HImg, DImg, size, cudaMemcpyDeviceToHost);
+    memcpy(img, HImg, size);
+
     free(HImg);
+    cudaFree(DImg);
 }
