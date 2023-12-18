@@ -32,19 +32,16 @@ void hostFE(float upperX, float upperY, float lowerX, float lowerY, int *img, in
     float stepX = (upperX - lowerX) / resX;
     float stepY = (upperY - lowerY) / resY;
 
-    int *DImg, *HImg;
+    int *DImg;
     int size = resX * resY * sizeof(int);
-    size_t pitch;
-    cudaHostAlloc(&HImg, size, cudaHostAllocMapped);
-    cudaMallocPitch(&DImg, &pitch, resX * sizeof(int), resY);
+
+    cudaMalloc(&DImg, size);
 
     dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
     dim3 dimGrid((resX + dimBlock.x - 1) / dimBlock.x, (resY + dimBlock.y - 1) / dimBlock.y);
     mandelKernel<<<dimGrid, dimBlock>>>(lowerX, lowerY, stepX, stepY, DImg, resX, resY, maxIterations);
 
-    cudaMemcpy(HImg, DImg, size, cudaMemcpyDeviceToHost);
-    memcpy(img, HImg, size);
+    cudaMemcpy(img, DImg, size, cudaMemcpyDeviceToHost);
 
     cudaFree(DImg);
-    cudaFreeHost(HImg);
 }

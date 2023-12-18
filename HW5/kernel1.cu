@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define BLOCK_SIZE 16
+
 __global__ void mandelKernel(float lowerX, float lowerY, float stepX, float stepY, int *img, int resX, int resY, int maxIterations)
 {
     int thisX = blockIdx.x * blockDim.x + threadIdx.x;
@@ -36,7 +38,7 @@ void hostFE(float upperX, float upperY, float lowerX, float lowerY, int *img, in
     cudaMalloc(&DImg, size);
     HImg = (int *)malloc(size);
 
-    dim3 dimBlock(32, 32);
+    dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
     dim3 dimGrid((resX + dimBlock.x - 1) / dimBlock.x, (resY + dimBlock.y - 1) / dimBlock.y);
     mandelKernel<<<dimGrid, dimBlock>>>(lowerX, lowerY, stepX, stepY, DImg, resX, resY, maxIterations);
 
