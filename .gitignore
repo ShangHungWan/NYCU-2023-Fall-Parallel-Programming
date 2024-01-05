@@ -1,7 +1,10 @@
 *.out
 *.o
 *.ppm
+*.bmp
+!input.bmp
 mandelbrot
 myexp
+conv
 test_auto_vectorize
 assembly/
